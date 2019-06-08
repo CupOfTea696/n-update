@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+
+# Variables
+N_PREFIX="${N_PREFIX-/usr/local}"
+BASE_VERSIONS_DIR="${N_PREFIX}/n/versions/node"
+
+CURRENT=false
+LTS=false
+LATEST=false
+
+# Input
+MAJOR=false
+MINOR=false
+PRUNE=false
+REQUESTED=()
+
+for i in "$@"; do
+    case ${i} in
+        -M|--major)
+            MAJOR=true
+            shift
+            ;;
+        -m|--minor)
+            MINOR=true
+            shift
+            ;;
+        -p|--prune)
+            PRUNE=true
+            shift
+            ;;
+        active|current)
+            CURRENT=true
+            shift
+            ;;
+        lts|stable)
+            LTS=true
+            REQUESTED+=("$(n --lts)")
+            shift
+            ;;
+        latest)
+            LATEST=true
+            REQUESTED+=("$(n --latest)")
+            shift
+            ;;
+        *)
+            if [[ ${i} != -* ]]; then
+                REQUESTED+=("${i,,}")
+            fi
+
+            shift
+            ;;
+    esac
+done
+
+# Helpers
+log() {
+    printf "  \033[36m%10s\033[0m : \e[2m%s\e[22m\033[0m\n" "$1" "$2"
+}
+
+current_is_installed=true
+n_rm() {
+    n rm $1
+    log removed "v${version}"
+
+    if [[ ${current} == $1 ]]; then
+        current_is_installed=false
+    fi
+}
+
+# $1-a $2-op $3-$b
+# Compare a and b as version strings. Rules:
+# R1: a and b : dot-separated sequence of items. Items are numeric. The last item can optionally end with letters, i.e., 2.5 or 2.5a.
+# R2: Zeros are automatically inserted to compare the same number of items, i.e., 1.0 < 1.0.1 means 1.0.0 < 1.0.1 => yes.
+# R3: op can be '=' '==' '!=' '<' '<=' '>' '>=' (lexicographic).
+# R4: Unrestricted number of digits of any item, i.e., 3.0003 > 3.0000004.
+# R5: Unrestricted number of items.
+v_comp() {
+    _v_comp() {
+        if [[ $1 == $2 ]]; then
+            echo 2
+            return
+        fi
+        local IFS=.
+        local i a=(${1%%[^0-9.]*}) b=(${2%%[^0-9.]*})
+        local arem=${1#${1%%[^0-9.]*}} brem=${2#${2%%[^0-9.]*}}
+        for ((i=0; i<${#a[@]} || i<${#b[@]}; i++)); do
+            if ((10#${a[i]:-0} < 10#${b[i]:-0})); then
+                echo 1
+                return
+            elif ((10#${a[i]:-0} > 10#${b[i]:-0})); then
+                echo 3
+                return
+            fi
+        done
+        if [[ "$arem" < "$brem" ]]; then
+            echo 1
+            return
+        elif [[ "$arem" > "$brem" ]]; then
+            echo 3
+            return
+        fi
+        echo 2
+    }
+
+    case $2 in
+        '<' | '<=' | '=' | '==' | '!=' | '>=' | '>')
+            ;;
+        *)
+            echo "$2 is not a valid comparator" >&2
+            exit 1
+            ;;
+    esac
+
+    case $(_v_comp $1 $3) in
+        1)
+            [[ $2 == '<' || $2 == '<=' || $2 == '!=' ]]
+            return $?
+            ;;
+        2)
+            [[ $2 == '=' || $2 == '==' || $2 == '<=' || $2 == '>=' ]]
+            return $?
+            ;;
+        3)
+            [[ $2 == '>' || $2 == '>=' || $2 == '!=' ]]
+            return $?
+            ;;
+    esac
+}
+
+get_major() {
+    echo $1 | sed -E "s/^([0-9]+).*/\1/"
+}
+
+get_minor() {
+    echo $1 | sed -E "s/^([0-9]+\.[0-9]+)?.*/\1/"
+}
+
+installed_versions() {
+    find "$BASE_VERSIONS_DIR" -maxdepth 1 -type d \
+      | sed 's|'"$BASE_VERSIONS_DIR"'/||g' \
+      | grep -E "[0-9]+\.[0-9]+\.[0-9]+$" \
+      | sort -V
+}
+
+installed_major_versions() {
+    installed_versions | sed -E "s/\.[0-9]+\.[0-9]+$//g" | uniq
+}
+
+installed_minor_versions() {
+    installed_versions | sed -E "s/\.[0-9]+$//g" | uniq
+}
+
+export -f log
+
+# Updater
+current=$(node --version | sed -E 's/^v//')
+
+if [[ ${CURRENT} = true ]]; then
+    if [[ ${MINOR} = true ]]; then
+        REQUESTED+=("$(get_minor ${current})")
+    else
+        REQUESTED+=("$(get_major ${current})")
+    fi
+fi
+
+if [[ ${#REQUESTED[@]} -eq 0 ]] && [[ ${MAJOR} = true || ${MINOR} = true ]]; then
+    if [[ ${MINOR} = true ]]; then
+        installed=$(installed_minor_versions)
+    else
+        installed=$(installed_major_versions)
+    fi
+
+    for version in ${installed}; do
+        REQUESTED+=("$version")
+    done
+elif [[ ${#REQUESTED[@]} -gt 1 ]]; then
+    IFS=$'\n' REQUESTED=($(sort -V <<<"${REQUESTED[*]}")); unset IFS
+fi
+
+if [[ ${#REQUESTED[@]} -eq 0 ]] || [[ ${#REQUESTED[@]} -eq 1 && ${LATEST} = true ]]; then
+    if [[ ${PRUNE} = true && ${MAJOR} = false && ${MINOR} = false ]]; then
+        n latest && n prune | sed -E "s#^node/#v#g" | xargs -n1 bash -c 'log removed "$@"' _
+        exit $?
+    fi
+fi
+
+for version in ${REQUESTED[@]}; do
+    n -d ${version}
+done
+
+installed=$(installed_versions)
+r=()
+
+declare -A majors=()
+declare -A minors=()
+
+for version in ${installed}; do
+    v_major=$(get_major ${version})
+    v_minor=$(get_minor ${version})
+
+    ((majors[$v_major]++))
+
+    if [[ ${v_minor} ]]; then
+        ((minors[$v_minor]++))
+    fi
+done
+
+for version in ${installed}; do
+    major=${MAJOR}
+    minor=${MINOR}
+    v_major=$(get_major ${version})
+    v_minor=$(get_minor ${version})
+
+    delete=true
+    prune=false
+    determine_prune=false
+
+    if [[ ${PRUNE} = true && ${MAJOR} = false && ${MINOR} = false ]] && v_comp ${version} '<' ${REQUESTED[0]}; then
+        n_rm ${version}
+
+        continue
+    fi
+
+    if [[ ${MINOR} = true || ${REQUESTED[-1]} =~ ^[0-9]+\.[0-9]+ ]]; then
+        comp=${v_minor}
+    else
+        comp=${v_major}
+    fi
+
+    if [[ ${minor} = false ]] && v_comp ${comp} '<=' ${REQUESTED[-1]}; then
+        determine_prune=true
+    fi
+
+    for requested in ${REQUESTED[@]}; do
+        if [[ ${version} == ${requested} ]]; then
+            delete=false
+            break
+        fi
+
+        if [[ ${PRUNE} = false ]]; then
+            if v_comp ${comp} '==' ${requested} || { [[ ${MINOR} = true ]] && v_comp ${v_major} '==' ${requested}; }; then
+                prune=true
+            fi
+        fi
+
+        if [[ ${determine_prune} = true ]]; then
+            if v_comp ${v_minor} '==' ${requested}; then
+                prune=true
+                minor=true
+            elif [[ ${major} = false ]] && { [[ ${PRUNE} = true ]] || v_comp ${v_major} '==' ${requested}; }; then
+                prune=true
+                major=true
+            fi
+        fi
+    done
+
+    if [[ ${prune} = false ]]; then
+        continue
+    fi
+
+    if [[ ${minor} = true ]]; then
+        if [[ ${minors[$v_minor]} > 1 ]]; then
+            if [[ ${delete} = true ]]; then
+                n_rm ${version}
+            fi
+
+            ((minors[$v_minor]--))
+        fi
+    elif [[ ${major} = true ]]; then
+        if [[ ${majors[$v_major]} > 1 ]]; then
+            if [[ ${delete} = true ]]; then
+                n_rm ${version}
+            fi
+
+            ((majors[$v_major]--))
+        fi
+    fi
+done
+
+if [[ ${current_is_installed} = false ]]; then
+    for version in $(installed_versions); do
+        if v_comp ${version} '>=' ${current}; then
+            n ${version}
+            log activated "v${version}"
+
+            exit
+        fi
+    done
+
+    n $(installed_versions | tail -1)
+fi

@@ -1,0 +1,34 @@
+{
+  "name": "n-update",
+  "version": "1.0.0",
+  "description": "The missing update command for n",
+  "keywords": [
+    "n",
+    "nvm",
+    "node",
+    "updater",
+    "node",
+    "binary",
+    "env"
+  ],
+  "license": "MIT",
+  "author": "Frankie Wittevrongel <frankie@cupoftea.io>",
+  "homepage": "https://github.com/CupOfTea696/n-update",
+  "bugs": "https://github.com/CupOfTea696/n-update/issues",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/CupOfTea696/n-update.git"
+  },
+  "bin": {
+    "n-update": "./bin/n-update"
+  },
+  "files": [
+    "bin/n-update"
+  ],
+  "os": [
+    "!win32"
+  ],
+  "engines": {
+    "node": "*"
+  }
+}
