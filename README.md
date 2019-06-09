@@ -1,6 +1,6 @@
 # n-update
 
-The missing update command for n
+The missing update command for [n](https://github.com/tj/n)
 
 ## Installation
 
