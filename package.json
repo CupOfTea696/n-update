@@ -1,6 +1,6 @@
 {
-  "name": "n-update",
-  "version": "1.0.0",
+  "name": "n-update-cli",
+  "version": "0.0.0",
   "description": "The missing update command for n",
   "keywords": [
     "n",
