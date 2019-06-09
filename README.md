@@ -7,8 +7,8 @@ The missing update command for [n](https://github.com/tj/n)
 Since you probably already have node, the easiest way to install n-update is through npm or yarn:
 
 ```bash
-$ npm -g install n-update
-$ yarn global add n-update
+$ npm -g install n-update-cli
+$ yarn global add n-update-cli
 ```
 
 ## Usage
