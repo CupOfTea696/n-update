@@ -184,6 +184,10 @@ if [[ ${#REQUESTED[@]} -eq 0 ]] || [[ ${#REQUESTED[@]} -eq 1 && ${LATEST} = true
     fi
 fi
 
+if [[ ${#REQUESTED[@]} -eq 0 ]]; then
+    REQUESTED+=("$(n --latest)")
+fi
+
 for version in ${REQUESTED[@]}; do
     n -d ${version}
 done
