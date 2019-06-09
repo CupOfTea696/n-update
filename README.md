@@ -1,5 +1,9 @@
 # n-update
 
+![npm](https://img.shields.io/npm/dt/n-update-cli.svg)
+![npm](https://img.shields.io/npm/v/n-update-cli.svg)
+![npm](https://img.shields.io/npm/l/n-update-cli.svg?color=%23458778)
+
 The missing update command for [n](https://github.com/tj/n)
 
 ## Installation
