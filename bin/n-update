@@ -153,6 +153,13 @@ installed_minor_versions() {
 export -f log
 
 # Updater
+echo ""
+
+if v_comp "$BASH_VERSION" '<' 4.2; then
+    >&2 printf "\e[31m[\e[1mError\e[0;31m]\e[0m Bash version must be \e[1;33m4.2\e[0m or above, current version is \e[33m%s\e[0m\n" "$(echo "$BASH_VERSION" | sed -E "s/([0-9]+\.[0-9]+\.[0-9]+).*/\1/")"
+    exit 1
+fi
+
 current=$(node --version | sed -E 's/^v//')
 
 if [[ ${CURRENT} = true ]]; then
