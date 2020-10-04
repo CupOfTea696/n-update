@@ -54,15 +54,15 @@ done
 
 # Helpers
 log() {
-    printf "  \033[36m%10s\033[0m : \e[2m%s\e[22m\033[0m\n" "$1" "$2"
+    printf "  \e[36m%10s\e[0;1m : \e[0;2m%s\e[0m\n" "$1" "$2"
 }
 
 current_is_installed=true
 n_rm() {
-    n rm $1
+    n rm "$1"
     log removed "v${version}"
 
-    if [[ ${current} == $1 ]]; then
+    if [[ ${current} == "$1" ]]; then
         current_is_installed=false
     fi
 }
@@ -76,12 +76,12 @@ n_rm() {
 # R5: Unrestricted number of items.
 v_comp() {
     _v_comp() {
-        if [[ $1 == $2 ]]; then
+        if [[ "$1" == "$2" ]]; then
             echo 2
             return
         fi
         local IFS=.
-        local i a=(${1%%[^0-9.]*}) b=(${2%%[^0-9.]*})
+        local i a=("${1%%[^0-9.]*}") b=("${2%%[^0-9.]*}")
         local arem=${1#${1%%[^0-9.]*}} brem=${2#${2%%[^0-9.]*}}
         for ((i=0; i<${#a[@]} || i<${#b[@]}; i++)); do
             if ((10#${a[i]:-0} < 10#${b[i]:-0})); then
@@ -111,7 +111,7 @@ v_comp() {
             ;;
     esac
 
-    case $(_v_comp $1 $3) in
+    case $(_v_comp "$1" "$3") in
         1)
             [[ $2 == '<' || $2 == '<=' || $2 == '!=' ]]
             return $?
@@ -128,11 +128,11 @@ v_comp() {
 }
 
 get_major() {
-    echo $1 | sed -E "s/^([0-9]+).*/\1/"
+    echo "$1" | sed -E "s/^([0-9]+).*/\1/"
 }
 
 get_minor() {
-    echo $1 | sed -E "s/^([0-9]+\.[0-9]+)?.*/\1/"
+    echo "$1" | sed -E "s/^([0-9]+\.[0-9]+)?.*/\1/"
 }
 
 installed_versions() {
@@ -157,9 +157,9 @@ current=$(node --version | sed -E 's/^v//')
 
 if [[ ${CURRENT} = true ]]; then
     if [[ ${MINOR} = true ]]; then
-        REQUESTED+=("$(get_minor ${current})")
+        REQUESTED+=("$(get_minor "${current}")")
     else
-        REQUESTED+=("$(get_major ${current})")
+        REQUESTED+=("$(get_major "${current}")")
     fi
 fi
 
@@ -188,19 +188,18 @@ if [[ ${#REQUESTED[@]} -eq 0 ]]; then
     REQUESTED+=("$(n --latest)")
 fi
 
-for version in ${REQUESTED[@]}; do
-    n -d ${version}
+for version in "${REQUESTED[@]}"; do
+    n -d "${version}"
 done
 
 installed=$(installed_versions)
-r=()
 
 declare -A majors=()
 declare -A minors=()
 
 for version in ${installed}; do
-    v_major=$(get_major ${version})
-    v_minor=$(get_minor ${version})
+    v_major=$(get_major "${version}")
+    v_minor=$(get_minor "${version}")
 
     ((majors[$v_major]++))
 
@@ -212,15 +211,15 @@ done
 for version in ${installed}; do
     major=${MAJOR}
     minor=${MINOR}
-    v_major=$(get_major ${version})
-    v_minor=$(get_minor ${version})
+    v_major=$(get_major "${version}")
+    v_minor=$(get_minor "${version}")
 
     delete=true
     prune=false
     determine_prune=false
 
-    if [[ ${PRUNE} = true && ${MAJOR} = false && ${MINOR} = false ]] && v_comp ${version} '<' ${REQUESTED[0]}; then
-        n_rm ${version}
+    if [[ ${PRUNE} = true && ${MAJOR} = false && ${MINOR} = false ]] && v_comp "${version}" '<' "${REQUESTED[0]}"; then
+        n_rm "${version}"
 
         continue
     fi
@@ -231,27 +230,27 @@ for version in ${installed}; do
         comp=${v_major}
     fi
 
-    if [[ ${minor} = false ]] && v_comp ${comp} '<=' ${REQUESTED[-1]}; then
+    if [[ ${minor} = false ]] && v_comp "${comp}" '<=' "${REQUESTED[-1]}"; then
         determine_prune=true
     fi
 
-    for requested in ${REQUESTED[@]}; do
-        if [[ ${version} == ${requested} ]]; then
+    for requested in "${REQUESTED[@]}"; do
+        if [[ ${version} == "${requested}" ]]; then
             delete=false
             break
         fi
 
         if [[ ${PRUNE} = false ]]; then
-            if v_comp ${comp} '==' ${requested} || { [[ ${MINOR} = true ]] && v_comp ${v_major} '==' ${requested}; }; then
+            if v_comp "${comp}" '==' "${requested}" || { [[ ${MINOR} = true ]] && v_comp "${v_major}" '==' "${requested}"; }; then
                 prune=true
             fi
         fi
 
         if [[ ${determine_prune} = true ]]; then
-            if v_comp ${v_minor} '==' ${requested}; then
+            if v_comp "${v_minor}" '==' "${requested}"; then
                 prune=true
                 minor=true
-            elif [[ ${major} = false ]] && { [[ ${PRUNE} = true ]] || v_comp ${v_major} '==' ${requested}; }; then
+            elif [[ ${major} = false ]] && { [[ ${PRUNE} = true ]] || v_comp "${v_major}" '==' "${requested}"; }; then
                 prune=true
                 major=true
             fi
@@ -263,17 +262,17 @@ for version in ${installed}; do
     fi
 
     if [[ ${minor} = true ]]; then
-        if [[ ${minors[$v_minor]} > 1 ]]; then
+        if [[ ${minors[$v_minor]} -gt 1 ]]; then
             if [[ ${delete} = true ]]; then
-                n_rm ${version}
+                n_rm "${version}"
             fi
 
             ((minors[$v_minor]--))
         fi
     elif [[ ${major} = true ]]; then
-        if [[ ${majors[$v_major]} > 1 ]]; then
+        if [[ ${majors[$v_major]} -gt 1 ]]; then
             if [[ ${delete} = true ]]; then
-                n_rm ${version}
+                n_rm "${version}"
             fi
 
             ((majors[$v_major]--))
@@ -283,13 +282,13 @@ done
 
 if [[ ${current_is_installed} = false ]]; then
     for version in $(installed_versions); do
-        if v_comp ${version} '>=' ${current}; then
-            n ${version}
+        if v_comp "${version}" '>=' "${current}"; then
+            n "${version}"
             log activated "v${version}"
 
             exit
         fi
     done
 
-    n $(installed_versions | tail -1)
+    n "$(installed_versions | tail -1)"
 fi
